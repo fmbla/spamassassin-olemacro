@@ -1,0 +1,3 @@
+body OLEMACRO eval:check_olemacro()
+describe OLEMACRO Attachment has a Office Macro
+score OLEMACRO 0.1
