@@ -43,6 +43,7 @@ sub check_olemacro {
 
   my $macrotypes = qr/(?:docm|dotm|potm|ppst|pptm|xlsb|xlsm|xltm)$/;
   my $exts = qr/(?:doc|dot|pot|pps|ppt|xls|xlt)$/;
+  my $mimec = 0;
 
   foreach my $part ($pms->{msg}->find_parts(qr/./, 1)) {
     my ($ctype, $boundary, $charset, $name) =
@@ -83,10 +84,15 @@ sub check_olemacro {
         next;
       }
 
+      my $filec = 0;
+
       my @members = $zip->members();
       foreach my $member (@members){
         my $mname = lc $member->fileName();
         return 1 if $mname =~ $macrotypes;
+
+        $filec += 1;
+        last if $filec > 5;
 
         if ($mname =~ $exts) {
           my ( $data, $status ) = $member->contents();
@@ -96,6 +102,9 @@ sub check_olemacro {
           }
         }
       }
+
+      $mimec += 1;
+      last if $mimec > 5;
 
     }
   }
