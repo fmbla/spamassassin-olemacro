@@ -12,13 +12,17 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.21';
+our $VERSION = '0.3';
 
 my $marker1 = "\xd0\xcf\x11\xe0";
 my $marker2 = "\x00\x41\x74\x74\x72\x69\x62\x75\x74\x00";
 
+# https://blogs.msdn.microsoft.com/vsofficedeveloper/2008/05/08/office-2007-file-format-mime-types-for-http-content-streaming-2/
+# https://technet.microsoft.com/en-us/library/ee309278(office.12).aspx
 my $macrotypes = qr/(?:docm|dotm|potm|ppst|pptm|xlsb|xlsm|xltm)$/;
 my $exts = qr/(?:doc|dot|pot|pps|ppt|xls|xlt)$/;
+my $skip_ctype = qr/^(?:(audio|image|text)\/|application\/(?:pdf))/;
+my $skip_exts = qr/\.(?:csv|docx|dotx|gif|html?|jpe?g|pdf|png|potx|pptx|txt|xlsx|xml)$/;
 
 my $max_mime = 5;
 my $max_zip = 5;
@@ -60,16 +64,29 @@ sub _check_attachments {
   $pms->{olemacro_exists} = 0;
 
   foreach my $part ($pms->{msg}->find_parts(qr/./, 1)) {
-    my ($ctype, $boundary, $charset, $name) =
-      Mail::SpamAssassin::Util::parse_content_type($part->get_header('content-type'));
+
+    my $ctt = $part->get_header('content-type');
+    next unless defined $ctt;
+    my ($ctype) =
+      Mail::SpamAssassin::Util::parse_content_type($ctt);
+    $ctt = _decode_part_header($part, lc($ctt || ''));
+
+    my $name='';
+    if($ctt =~ m/name\s*=\s*"?([^";]*)"?/is){
+      $name=$1;
+      # lets be sure and remove any whitespace from the end
+      $name =~ s/\s+$//;
+    }
+
+    $name = lc $name;
+    next if $name eq '';
+    next if ($name =~ $skip_exts);
 
     my $cte = lc($part->get_header('content-transfer-encoding') || '');
-    my $data = undef;
-
     next unless ($cte =~ /^(?:base64)$/);
 
-    $name = lc($name || '');
     $ctype = lc $ctype;
+    next if ($ctype =~ $skip_ctype);
 
     dbg("Found attachment with name $name of type $ctype ");
 
@@ -78,6 +95,8 @@ sub _check_attachments {
       $pms->{olemacro_exists} = 1;
       return 1;
     }
+
+    my $data = undef;
 
     # if name is ext type - check and return true if needed
     if ($name =~ $exts) {
@@ -89,11 +108,11 @@ sub _check_attachments {
     }
 
     # check for zip
-    my $tdata = $part->decode(6);
+    $data = $part->decode(6) unless defined $data;
 
-    if (_is_zip_file($name, $tdata)) {
+    if (_is_zip_file($name, $data)) {
       dbg("$name is a zip file");
-      $data = $part->decode() unless defined $data;
+      $data = $part->decode() if length $data == 6;
       if (_check_zip($data)) {
         $pms->{olemacro_exists} = 1;
         return 1;
@@ -110,6 +129,7 @@ sub _check_attachments {
 sub _check_zip {
   my ($data) = @_;
 
+  # open our archive from raw datas
   my $SH = IO::String->new($data);
 
   Archive::Zip::setErrorHandler( \&_zip_error_handler );
@@ -124,26 +144,37 @@ sub _check_zip {
   my $filec = 0;
 
   my @members = $zip->members();
+
+  # Look for a member named [Content_Types].xml and do checks
+
+  if (my $ctypesxml = $zip->memberNamed('[Content_Types].xml')) {
+    dbg('Found [Content_Types].xml file');
+    my ( $data, $status ) = $ctypesxml->contents();
+    return 0 unless $status == AZ_OK;
+    if (_check_ctype_xml($data)) {
+      return 1;
+    } else {
+      return 0;
+    }
+  }
+
+  # foreach zip member
+  # - skip if in skip exts
+  # - return 1 if in macro types
+  # - check for marker if doc type
+  # - check if a zip
   foreach my $member (@members){
     my $mname = lc $member->fileName();
+    next if $mname =~ $skip_exts;
+    return 1 if $mname =~ $macrotypes;
+
     my $data = undef;
     my $status = undef;
-
-    return 1 if $mname =~ $macrotypes;
 
     if ($mname =~ $exts) {
       ( $data, $status ) = $member->contents() unless defined $data;
       next unless $status == AZ_OK;
       if (_check_markers($data)) {
-        return 1;
-      }
-    }
-
-    if ($mname eq "[content_types].xml") {
-      ( $data, $status ) = $member->contents() unless defined $data;
-      next unless $status == AZ_OK;
-      if ($data =~ /ContentType=["']application\/vnd.ms-office.vbaProject["']/i){
-        dbg('vbaProject reference in xml');
         return 1;
       }
     }
@@ -180,8 +211,55 @@ sub _check_markers {
   }
 }
 
+sub _check_ctype_xml {
+  my ($data) = @_;
+
+  # http://download.microsoft.com/download/D/3/3/D334A189-E51B-47FF-B0E8-C0479AFB0E3C/[MS-OFFMACRO].pdf
+  if ($data =~ /ContentType=["']application\/vnd\.ms-office\.vbaProject["']/i){
+    dbg('Found VBA ref');
+    return 1;
+  }
+  if ($data =~ /macroEnabled/i) {
+    dbg('Found Macro Ref');
+    return 1;
+  }
+  if ($data =~ /application\/vnd\.ms-excel\.(?:intl)?macrosheet/i) {
+    dbg('Excel macrosheet found');
+    return 1;
+  }
+}
+
 sub _zip_error_handler {
 
+}
+
+sub _decode_part_header {
+  my($part, $header_field_body) = @_;
+
+  return '' unless defined $header_field_body && $header_field_body ne '';
+
+  # deal with folding and cream the newlines and such
+  $header_field_body =~ s/\n[ \t]+/\n /g;
+  $header_field_body =~ s/\015?\012//gs;
+
+  local($1,$2,$3);
+
+  # Multiple encoded sections must ignore the interim whitespace.
+  # To avoid possible FPs with (\s+(?==\?))?, look for the whole RE
+  # separated by whitespace.
+  1 while $header_field_body =~
+            s{ ( = \? [A-Za-z0-9_-]+ \? [bqBQ] \? [^?]* \? = ) \s+
+               ( = \? [A-Za-z0-9_-]+ \? [bqBQ] \? [^?]* \? = ) }
+             {$1$2}xsg;
+
+  # transcode properly encoded RFC 2047 substrings into UTF-8 octets,
+  # leave everything else unchanged as it is supposed to be UTF-8 (RFC 6532)
+  # or plain US-ASCII
+  $header_field_body =~
+    s{ (?: = \? ([A-Za-z0-9_-]+) \? ([bqBQ]) \? ([^?]*) \? = ) }
+     { $part->__decode_header($1, uc($2), $3) }xsge;
+
+  return $header_field_body;
 }
 
 1;
