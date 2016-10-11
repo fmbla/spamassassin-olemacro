@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.2';
+our $VERSION = '0.21';
 
 my $marker1 = "\xd0\xcf\x11\xe0";
 my $marker2 = "\x00\x41\x74\x74\x72\x69\x62\x75\x74\x00";
