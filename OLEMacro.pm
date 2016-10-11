@@ -12,15 +12,17 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.3';
+our $VERSION = '0.31';
 
+# https://www.openoffice.org/sc/compdocfileformat.pdf
+# http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
 my $marker1 = "\xd0\xcf\x11\xe0";
 my $marker2 = "\x00\x41\x74\x74\x72\x69\x62\x75\x74\x00";
 
 # https://blogs.msdn.microsoft.com/vsofficedeveloper/2008/05/08/office-2007-file-format-mime-types-for-http-content-streaming-2/
 # https://technet.microsoft.com/en-us/library/ee309278(office.12).aspx
-my $macrotypes = qr/(?:docm|dotm|potm|ppst|pptm|xlsb|xlsm|xltm)$/;
-my $exts = qr/(?:doc|dot|pot|pps|ppt|xls|xlt)$/;
+my $macrotypes = qr/(?:docm|dotm|ppam|potm|ppst|ppsm|pptm|sldm|xlam|xlsb|xlsm|xltm)$/;
+my $exts = qr/(?:doc|dot|pot|ppa|pps|ppt|xla|xls|xlt)$/;
 my $skip_ctype = qr/^(?:(audio|image|text)\/|application\/(?:pdf))/;
 my $skip_exts = qr/\.(?:csv|docx|dotx|gif|html?|jpe?g|pdf|png|potx|pptx|txt|xlsx|xml)$/;
 
