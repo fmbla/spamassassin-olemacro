@@ -148,10 +148,11 @@ sub _check_zip {
       }
     }
 
+    ( $data, $status ) = $member->contents() unless defined $data;
+    next unless $status == AZ_OK;
+
     if (_is_zip_file($mname, $data)) {
       dbg("$mname is a zip file");
-      ( $data, $status ) = $member->contents() unless defined $data;
-      next unless $status == AZ_OK;
       if (_check_zip($data)) {
         return 1;
       }
