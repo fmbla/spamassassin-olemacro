@@ -77,7 +77,7 @@ All configuration options should be fine at default. Tweak at your own risk.
  - olemacro_zips
  - olemacro_skip_exts
 
-####olemacro_max_file - [int] (bytes)
+####olemacro_max_file - [int] - bytes
 Configure the largest file that the plugin will decode from the MIME objects
 #####Default
 
@@ -115,7 +115,7 @@ Configure the extensions the plugin treats as containing a macro
 
     olemacro_macro_exts (?:docm|dotm|ppam|potm|ppst|ppsm|pptm|sldm|xlam|xlsb|xlsm|xltm)$
 
-####olemacro_zips
+####olemacro_zips - [regex]
 Configure extensions for the plugin to target as zip files, files listed in configs above are also tested for zip
 #####Default
 
