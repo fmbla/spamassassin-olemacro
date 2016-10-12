@@ -1,7 +1,7 @@
-body OLEMACRO eval:check_olemacro()
+body     OLEMACRO eval:check_olemacro()
 describe OLEMACRO Attachment has a Office Macro
-score OLEMACRO 0.1
+score    OLEMACRO 0.1
 
-body OLEMACRO_MALICE eval:check_olemacro_malice()
+body     OLEMACRO_MALICE eval:check_olemacro_malice()
 describe OLEMACRO_MALICE Potentially malicious Office Macro
-score OLEMACRO_MALICE 0.1
+score    OLEMACRO_MALICE 0.1
