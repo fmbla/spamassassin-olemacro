@@ -248,6 +248,11 @@ sub _check_attachments {
         }
       }
 
+      if (_is_encrypted_doc($data)) {
+        dbg("Attachment $name is encrypted");
+        $pms->{olemacro_encrypted} = 1;
+      }
+
       # if we find markers then return true
       if (_check_markers($data)) {
         $pms->{olemacro_exists} = 1;
@@ -257,10 +262,6 @@ sub _check_attachments {
         return 1;
       }
 
-      if (_is_encrypted_doc($data)) {
-        dbg("Attachment $name is encrypted");
-        $pms->{olemacro_encrypted} = 1;
-      }
     }
 
     if ($name =~ qr/$pms->{conf}->{olemacro_zips}/) {
@@ -404,16 +405,16 @@ sub _check_zip {
         }
       }
 
+      if (_is_encrypted_doc($data)) {
+        dbg("Attachment $mname is encrypted");
+        $pms->{olemacro_encrypted} = 1;
+      }
+
       if (_check_markers($data)) {
         if (_check_malice($data)) {
           $pms->{olemacro_malice} = 1;
         }
         return 1;
-      }
-
-      if (_is_encrypted_doc($data)) {
-        dbg("Attachment $mname is encrypted");
-        $pms->{olemacro_encrypted} = 1;
       }
 
     }
@@ -468,9 +469,28 @@ sub _check_zip {
 sub _is_encrypted_doc {
   my ($data) = @_;
 
-  if ((_is_office_doc($data)) && ($data =~ /(?:<encryption xmlns)/i)) {
-    return 1;
+  #http://stackoverflow.com/questions/14347513/how-to-detect-if-a-word-document-is-password-protected-before-uploading-the-file/14347730#14347730
+  if (_is_office_doc($data)) {
+    if ($data =~ /(?:<encryption xmlns)/i) {
+      return 1;
+    }
+    if (index($data, "\x13") == 523) {
+      return 1;
+    }
+    if (index($data, "\x2f") == 532) {
+      return 1;
+    }
+    if (index($data, "\xfe") == 520) {
+      return 1;
+    }
+    my $tdata = substr $data, 2000;
+    $tdata =~ s/\\0/ /g;
+    if (index($tdata, "E n c r y p t e d P a c k a g e") > -1) {
+      return 1;
+    }
+
   }
+
 }
 
 sub _is_office_doc {

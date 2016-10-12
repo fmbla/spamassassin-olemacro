@@ -24,8 +24,8 @@ New body eval functions are added when this plug in is installed
 
  - check_olemacro
  - check_olemacro_malice
- - check_olemacro_renamed
  - check_olemacro_encrypted
+ - check_olemacro_renamed
  - check_olemacro_zip_password
 
 ####check_olemacro
@@ -43,6 +43,13 @@ Check for the existence of an attachment with a potential malicious embedded OLE
     describe OLEMACRO_MALICE Potentially malicious Office Macro
     score    OLEMACRO_MALICE 0.1
 
+####check_olemacro_encrypted
+Check if found Office document is encrypted
+
+    body     OLEMACRO_ENCRYPTED eval:check_olemacro_encrypted()
+    describe OLEMACRO_ENCRYPTED Has an Office doc that is encrypted
+    score    OLEMACRO_ENCRYPTED 0.1
+
 ####check_olemacro_renamed
 Check for the existence of an attachment that looks as though it is a *olemacro_macro_exts* file renamed to a *olemacro_exts* file
 
@@ -50,13 +57,6 @@ Check for the existence of an attachment that looks as though it is a *olemacro_
     describe OLEMACRO_RENAME Has an Office doc that has been renamed
     score    OLEMACRO_RENAME 0.1
 
-
-####check_olemacro_encrypted
-Check if found Office document is encrypted
-
-    body     OLEMACRO_ENCRYPTED eval:check_olemacro_encrypted()
-    describe OLEMACRO_ENCRYPTED Has an Office doc that is encrypted
-    score    OLEMACRO_ENCRYPTED 0.1
 
 ####check_olemacro_zip_password
 Check for the existence of an encrypted zip member that matches either *olemacro_exts* or *olemacro_macro_exts*
