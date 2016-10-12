@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.31';
+our $VERSION = '0.32';
 
 # https://www.openoffice.org/sc/compdocfileformat.pdf
 # http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
@@ -24,7 +24,7 @@ my $marker2 = "\x00\x41\x74\x74\x72\x69\x62\x75\x74\x00";
 my $macrotypes = qr/(?:docm|dotm|ppam|potm|ppst|ppsm|pptm|sldm|xlam|xlsb|xlsm|xltm)$/;
 my $exts = qr/(?:doc|dot|pot|ppa|pps|ppt|xla|xls|xlt)$/;
 my $skip_ctype = qr/^(?:(audio|image|text)\/|application\/(?:pdf))/;
-my $skip_exts = qr/\.(?:csv|docx|dotx|gif|html?|jpe?g|pdf|png|potx|pptx|txt|xlsx|xml)$/;
+my $skip_exts = qr/\.(?:csv|docx|dotx|gif|html?|jpe?g|pdf|png|potx|pptx|txt|xlsx)$/;
 
 my $max_mime = 5;
 my $max_zip = 5;
@@ -41,6 +41,7 @@ sub new {
   bless ($self, $class);
 
   $self->register_eval_rule("check_olemacro");
+  $self->register_eval_rule("check_olemacro_malice");
 
   return $self;
 }
@@ -57,6 +58,14 @@ sub check_olemacro {
   return $pms->{olemacro_exists};
 }
 
+sub check_olemacro_malice {
+  my ($self,$pms,$body,$name) = @_;
+
+  _check_attachments(@_) unless exists $pms->{olemacro_malice};
+
+  return $pms->{olemacro_malice};
+}
+
 sub _check_attachments {
 
   my ($self,$pms,$body,$name) = @_;
@@ -64,8 +73,11 @@ sub _check_attachments {
   my $mimec = 0;
 
   $pms->{olemacro_exists} = 0;
+  $pms->{olemacro_malice} = 0;
 
   foreach my $part ($pms->{msg}->find_parts(qr/./, 1)) {
+
+    # complex setup...
 
     my $ctt = $part->get_header('content-type');
     next unless defined $ctt;
@@ -90,21 +102,30 @@ sub _check_attachments {
     $ctype = lc $ctype;
     next if ($ctype =~ $skip_ctype);
 
+    # we skipped what we need/want to
+
     dbg("Found attachment with name $name of type $ctype ");
+
+    my $data = undef;
 
     # if name is macrotype - return true
     if ($name =~ $macrotypes) {
       $pms->{olemacro_exists} = 1;
+
+      $data = $part->decode() unless defined $data;
+      _check_zip($pms, $data);
+
       return 1;
     }
-
-    my $data = undef;
 
     # if name is ext type - check and return true if needed
     if ($name =~ $exts) {
       $data = $part->decode() unless defined $data;
       if (_check_markers($data)) {
         $pms->{olemacro_exists} = 1;
+        if (_check_malice($data)) {
+          $pms->{olemacro_malice} = 1;
+        }
         return 1;
       }
     }
@@ -115,7 +136,7 @@ sub _check_attachments {
     if (_is_zip_file($name, $data)) {
       dbg("$name is a zip file");
       $data = $part->decode() if length $data == 6;
-      if (_check_zip($data)) {
+      if (_check_zip($pms, $data)) {
         $pms->{olemacro_exists} = 1;
         return 1;
       }
@@ -129,7 +150,7 @@ sub _check_attachments {
 }
 
 sub _check_zip {
-  my ($data) = @_;
+  my ($pms, $data) = @_;
 
   # open our archive from raw datas
   my $SH = IO::String->new($data);
@@ -154,6 +175,9 @@ sub _check_zip {
     my ( $data, $status ) = $ctypesxml->contents();
     return 0 unless $status == AZ_OK;
     if (_check_ctype_xml($data)) {
+      if (_find_malice_bins($zip)) {
+        $pms->{olemacro_malice} = 1;
+      }
       return 1;
     } else {
       return 0;
@@ -178,6 +202,9 @@ sub _check_zip {
       next unless $status == AZ_OK;
       if (_check_markers($data)) {
         return 1;
+        if (_check_malice($data)) {
+          $pms->{olemacro_malice} = 1;
+        }
       }
     }
 
@@ -186,7 +213,7 @@ sub _check_zip {
 
     if (_is_zip_file($mname, $data)) {
       dbg("$mname is a zip file");
-      if (_check_zip($data)) {
+      if (_check_zip($pms, $data)) {
         return 1;
       }
     }
@@ -207,8 +234,36 @@ sub _is_zip_file {
 
 sub _check_markers {
   my ($data) = @_;
+
   if (index($data, $marker1) == 0 && index($data, $marker2) > -1) {
     dbg('Marker found');
+    return 1;
+  }
+
+  if (index($data, 'w:macrosPresent="yes"') > -1) {
+    return 1;
+  }
+}
+
+sub _find_malice_bins {
+  my ($zip) = @_;
+
+  my @binfiles = $zip->membersMatching( '.*\.bin' );
+
+  foreach my $member (@binfiles){
+      my ( $data, $status ) = $member->contents();
+      next unless $status == AZ_OK;
+      if (_check_malice($data)) {
+        return 1;
+      }
+  }  
+}
+
+sub _check_malice {
+  my ($data) = @_;
+
+  # https://www.greyhathacker.net/?p=872
+  if ($data =~ /(document|auto|workbook)_?open/i) {
     return 1;
   }
 }
