@@ -1,7 +1,19 @@
 body     OLEMACRO eval:check_olemacro()
-describe OLEMACRO Attachment has a Office Macro
+describe OLEMACRO Attachment has an Office Macro
 score    OLEMACRO 0.1
 
 body     OLEMACRO_MALICE eval:check_olemacro_malice()
 describe OLEMACRO_MALICE Potentially malicious Office Macro
 score    OLEMACRO_MALICE 0.1
+
+body     OLEMACRO_RENAME eval:check_olemacro_renamed()
+describe OLEMACRO_RENAME Has an Office doc that has been renamed
+score    OLEMACRO_RENAME 0.1
+
+body     OLEMACRO_ZIP_PW eval:check_olemacro_zip_password()
+describe OLEMACRO_ZIP_PW Has an Office doc that is password protected in a zip
+score    OLEMACRO_ZIP_PW 0.1
+
+body     OLEMACRO_ENCRYPTED eval:check_olemacro_encrypted()
+describe OLEMACRO_ENCRYPTED Has an Office doc that is encrypted
+score    OLEMACRO_ENCRYPTED 0.1
