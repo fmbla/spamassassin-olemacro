@@ -97,6 +97,7 @@ Configure the maximum number of matching (see below) zip members the plugin will
 
 ####olemacro_extended_scan - [bool]
 Scan more files for potential macros, *olemacro_skip_exts* still honored
+
 **Note** this is off by default and shouldn't be needed. If this is turned on consider adjusting values for *olemacro_num_mime* and *olemacro_num_zip* and prepare for more CPU overhead
 #####Default
 
@@ -128,10 +129,13 @@ Configure extensions for the plugin to skip entirely, these should only be guara
 
 ##Change Log
 ###Version 0.4
+
  - Added **check_olemacro_renamed**, **check_olemacro_zip_password** and **check_olemacro_encrypted**
  - Added configuration options
  - Adjusted zip support
  - More dbg'ing
+
 ###Version 0.321
+
  - First public release
  - Thanks to Alex for examples and testing
