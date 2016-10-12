@@ -1,1 +1,1 @@
-loadplugin Mail::SpamAssassin::Plugin::OLEMacro /etc/spamassassin/OLEMacro.pm
+loadplugin Mail::SpamAssassin::Plugin::OLEMacro OLEMacro.pm
