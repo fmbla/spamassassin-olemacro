@@ -108,13 +108,13 @@ Scan more files for potential macros, *olemacro_skip_exts* still honored
 Configure the extensions the plugin targets for macro scanning
 #####Default
 
-    olemacro_exts (?:doc|dot|pot|ppa|pps|ppt|xla|xls|xlt)$
+    olemacro_exts (?:doc|dot|pot|ppa|pps|ppt|sldm|xl|xla|xls|xlt|xslb)$
 
 ####olemacro_macro_exts - [regex]
 Configure the extensions the plugin treats as containing a macro
 #####Default
 
-    olemacro_macro_exts (?:docm|dotm|ppam|potm|ppst|ppsm|pptm|sldm|xlam|xlsb|xlsm|xltm)$
+    olemacro_macro_exts (?:docm|dotm|ppam|potm|ppst|ppsm|pptm|sldm|xlm|xlam|xlsb|xlsm|xltm)$
 
 ####olemacro_zips - [regex]
 Configure extensions for the plugin to target as zip files, files listed in configs above are also tested for zip
@@ -126,7 +126,7 @@ Configure extensions for the plugin to target as zip files, files listed in conf
 Configure extensions for the plugin to skip entirely, these should only be guaranteed macro free files
 #####Default
 
-     olemacro_skip_exts (?:docx|dotx|potx|pptx|xlsx)$
+     olemacro_skip_exts (?:docx|dotx|potx|ppsx|pptx|sldx|xlsx|xltx)$
 
 ####olemacro_prefer_contentdisposition - [bool]
 Should the content-disposition header filename be preferred if ambiguity is encountered whilst trying to get filename

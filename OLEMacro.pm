@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.41';
+our $VERSION = '0.411';
 
 # https://www.openoffice.org/sc/compdocfileformat.pdf
 # http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
@@ -83,7 +83,7 @@ sub set_config {
 
   push(@cmds, {
     setting => 'olemacro_exts',
-    default => '(?:doc|dot|pot|ppa|pps|ppt|xla|xls|xlt)$',
+    default => '(?:doc|dot|pot|ppa|pps|ppt|sldm|xl|xla|xls|xlt|xslb)$',
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_STRING,
     code => sub {
       my ($self, $key, $value, $line) = @_;
@@ -99,7 +99,7 @@ sub set_config {
 
   push(@cmds, {
     setting => 'olemacro_macro_exts',
-    default => '(?:docm|dotm|ppam|potm|ppst|ppsm|pptm|sldm|xlam|xlsb|xlsm|xltm)$',
+    default => '(?:docm|dotm|ppam|potm|ppst|ppsm|pptm|sldm|xlm|xlam|xlsb|xlsm|xltm)$',
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_STRING,
     code => sub {
       my ($self, $key, $value, $line) = @_;
@@ -114,7 +114,7 @@ sub set_config {
 
   push(@cmds, {
     setting => 'olemacro_skip_exts',
-    default => '(?:docx|dotx|potx|pptx|xlsx)$',
+    default => '(?:docx|dotx|potx|ppsx|pptx|sldx|xlsx|xltx)$',
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_STRING,
     code => sub {
       my ($self, $key, $value, $line) = @_;
@@ -322,7 +322,7 @@ sub _get_part_details {
     my $cttname = '';
     my $ctdname = '';
 
-    if($ctt =~ m/(?:file)?name\s*=\s*"?([^";]*)"?/is){
+    if($ctt =~ m/(?:file)?name\s*=\s*["']?([^"';]*)["']?/is){
       $cttname = $1;
       $cttname =~ s/\s+$//;
     }
@@ -330,7 +330,7 @@ sub _get_part_details {
     my $ctd = $part->get_header('content-disposition');
     $ctd = _decode_part_header($part, lc($ctd || ''));
 
-    if($ctd =~ m/filename\s*=\s*"?([^";]*)"?/is){
+    if($ctd =~ m/filename\s*=\s*["']?([^"';]*)["']?/is){
       $ctdname = $1;
       $ctdname =~ s/\s+$//;
     }
@@ -339,6 +339,8 @@ sub _get_part_details {
       $name = $ctdname;
     } elsif ($ctdname eq '') {
       $name = $cttname;
+    } elsif ($cttname eq '') {
+      $name = $ctdname;
     } else {
       if ($pms->{conf}->{olemacro_prefer_contentdisposition}) {
         $name = $ctdname;
@@ -575,7 +577,7 @@ sub _check_malice {
   my ($data) = @_;
 
   # https://www.greyhathacker.net/?p=872
-  if ($data =~ /(document|auto|workbook)_?open/i) {
+  if ($data =~ /(?:document|auto|workbook)_?open/i) {
     dbg('Found potential malicious code');
     return 1;
   }
