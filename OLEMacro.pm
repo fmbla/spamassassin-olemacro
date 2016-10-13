@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.4';
+our $VERSION = '0.41';
 
 # https://www.openoffice.org/sc/compdocfileformat.pdf
 # http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
@@ -63,6 +63,12 @@ sub set_config {
   push(@cmds, {
     setting => 'olemacro_extended_scan',
     default => 0,
+    type => $Mail::SpamAssassin::Conf::CONF_TYPE_BOOL,
+  });
+
+  push(@cmds, {
+    setting => 'olemacro_prefer_contentdisposition',
+    default => 1,
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_BOOL,
   });
 
@@ -195,27 +201,14 @@ sub _check_attachments {
 
   foreach my $part ($pms->{msg}->find_parts(qr/./, 1)) {
 
-    # setup vars and next if anything looks off
-    my $ctt = $part->get_header('content-type');
-    next unless defined $ctt;
-#    my ($ctype) =
-#      Mail::SpamAssassin::Util::parse_content_type($ctt);
-    $ctt = _decode_part_header($part, lc($ctt || ''));
+    my ($ctt, $ctd, $cte, $name) = _get_part_details($pms, $part);
 
-    my $name = '';
-    if($ctt =~ m/name\s*=\s*"?([^";]*)"?/is){
-      $name = lc $1;
-      # lets be sure and remove any whitespace from the end
-      $name =~ s/\s+$//;
-    }
+    next unless defined $ctt;
+    next unless ($cte =~ /^(?:base64)$/);
 
     next if $name eq '';
     next if ($name =~ qr/$pms->{conf}->{olemacro_skip_exts}/);
 
-    my $cte = lc($part->get_header('content-transfer-encoding') || '');
-    next unless ($cte =~ /^(?:base64)$/);
-
-    #$ctype = lc $ctype;
     # we skipped what we need/want to
 
     my $data = undef;
@@ -315,6 +308,50 @@ sub _check_attachments {
   return 0;
 }
 
+sub _get_part_details {
+    my ($pms, $part) = @_;
+    #https://en.wikipedia.org/wiki/MIME#Content-Disposition
+    #https://github.com/mikel/mail/pull/464
+
+    my $ctt = $part->get_header('content-type');
+    return undef unless defined $ctt;
+
+    $ctt = _decode_part_header($part, lc($ctt || ''));
+
+    my $name = '';
+    my $cttname = '';
+    my $ctdname = '';
+
+    if($ctt =~ m/(?:file)?name\s*=\s*"?([^";]*)"?/is){
+      $cttname = $1;
+      $cttname =~ s/\s+$//;
+    }
+
+    my $ctd = $part->get_header('content-disposition');
+    $ctd = _decode_part_header($part, lc($ctd || ''));
+
+    if($ctd =~ m/filename\s*=\s*"?([^";]*)"?/is){
+      $ctdname = $1;
+      $ctdname =~ s/\s+$//;
+    }
+
+    if ($ctdname eq $cttname) {
+      $name = $ctdname;
+    } elsif ($ctdname eq '') {
+      $name = $cttname;
+    } else {
+      if ($pms->{conf}->{olemacro_prefer_contentdisposition}) {
+        $name = $ctdname;
+      } else {
+        $name = $cttname;
+      }
+    }
+
+    my $cte = lc($part->get_header('content-transfer-encoding') || '');
+
+    return $ctt, $ctd, $cte, $name;
+}
+
 sub _check_zip {
   my ($pms, $data) = @_;
 
@@ -330,12 +367,7 @@ sub _check_zip {
     return 0;
   }
 
-  my $filec = 0;
-
-  my @members = $zip->members();
-
   # Look for a member named [Content_Types].xml and do checks
-
   if (my $ctypesxml = $zip->memberNamed('[Content_Types].xml')) {
     dbg('Found [Content_Types].xml file');
     $pms->{olemacro_office_xml} = 1;
@@ -353,6 +385,8 @@ sub _check_zip {
     }
   }
 
+  my $filec = 0;
+  my @members = $zip->members();
   # foreach zip member
   # - skip if in skip exts
   # - return 1 if in macro types

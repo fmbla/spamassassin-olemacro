@@ -76,6 +76,7 @@ All configuration options should be fine at default. Tweak at your own risk.
  - olemacro_macro_exts
  - olemacro_zips
  - olemacro_skip_exts
+ - olemacro_prefer_contentdisposition
 
 ####olemacro_max_file - [int] - bytes
 Configure the largest file that the plugin will decode from the MIME objects
@@ -127,7 +128,19 @@ Configure extensions for the plugin to skip entirely, these should only be guara
 
      olemacro_skip_exts (?:docx|dotx|potx|pptx|xlsx)$
 
+####olemacro_prefer_contentdisposition - [bool]
+Should the content-disposition header filename be preferred if ambiguity is encountered whilst trying to get filename
+#####Default
+
+     olemacro_prefer_contentdisposition 1
+
 ##Change Log
+###Version 0.41
+
+ - Adjustment to the way filenames are detected
+ - New option **olemacro_prefer_contentdisposition**
+ - Adjust to where zip members are loaded
+
 ###Version 0.4
 
  - Added **check_olemacro_renamed**, **check_olemacro_zip_password** and **check_olemacro_encrypted**
