@@ -71,13 +71,13 @@ All configuration options should be fine at default. Tweak at your own risk.
  - olemacro_max_file
  - olemacro_num_mime
  - olemacro_num_zip
+ - olemacro_zip_depth
  - olemacro_extended_scan
  - olemacro_exts
  - olemacro_macro_exts
  - olemacro_zips
  - olemacro_skip_exts
  - olemacro_prefer_contentdisposition
- - olemacro_zip_depth
 
 ####olemacro_max_file - [int] - bytes
 Configure the largest file that the plugin will decode from the MIME objects
