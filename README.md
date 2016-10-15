@@ -143,7 +143,7 @@ Should the content-disposition header filename be preferred if ambiguity is enco
 
 ##Change Log
 
-###Version 0.41
+###Version 0.42
 
  - New regex values
  - New option **olemacro_zip_depth**
