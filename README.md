@@ -77,6 +77,7 @@ All configuration options should be fine at default. Tweak at your own risk.
  - olemacro_zips
  - olemacro_skip_exts
  - olemacro_prefer_contentdisposition
+ - olemacro_zip_depth
 
 ####olemacro_max_file - [int] - bytes
 Configure the largest file that the plugin will decode from the MIME objects
@@ -95,6 +96,12 @@ Configure the maximum number of matching (see below) zip members the plugin will
 #####Default
 
     olemacro_num_zip 5
+
+####olemacro_zip_depth - [int]
+Depth to recurse within Zip files
+#####Default
+
+     olemacro_zip_depth 2
 
 ####olemacro_extended_scan - [bool]
 Scan more files for potential macros, *olemacro_skip_exts* still honored
@@ -135,6 +142,13 @@ Should the content-disposition header filename be preferred if ambiguity is enco
      olemacro_prefer_contentdisposition 1
 
 ##Change Log
+
+###Version 0.41
+
+ - New regex values
+ - New option **olemacro_zip_depth**
+ - Re-working of code for code de-duplication
+
 ###Version 0.41
 
  - Adjustment to the way filenames are detected

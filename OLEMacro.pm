@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.411';
+our $VERSION = '0.42';
 
 # https://www.openoffice.org/sc/compdocfileformat.pdf
 # http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
@@ -57,6 +57,12 @@ sub set_config {
   push(@cmds, {
     setting => 'olemacro_num_zip',
     default => 5,
+    type => $Mail::SpamAssassin::Conf::CONF_TYPE_NUMERIC,
+  });
+
+  push(@cmds, {
+    setting => 'olemacro_zip_depth',
+    default => 2,
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_NUMERIC,
   });
 
@@ -215,95 +221,181 @@ sub _check_attachments {
 
     # if name is macrotype - return true
     if ($name =~ qr/$pms->{conf}->{olemacro_macro_exts}/) {
-      dbg("Found macrotype attachment with name $name");# of type $ctype ");
+      dbg("Found macrotype attachment with name $name");
       $pms->{olemacro_exists} = 1;
 
       $data = $part->decode($chunk_size) unless defined $data;
-      if (_is_zip_file($name, $data)) {
-        _check_zip($pms, $data);
-      }
 
-      return 1;
+      _check_encrypted_doc($pms, $name, $data);
+      _check_macrotype_doc($pms, $name, $data);
+
+      return 1 if $pms->{olemacro_exists} == 1;
     }
 
     # if name is ext type - check and return true if needed
     if ($name =~ qr/$pms->{conf}->{olemacro_exts}/) {
-      dbg("Found attachment with name $name");# of type $ctype ");
+      dbg("Found attachment with name $name");
       $data = $part->decode($chunk_size) unless defined $data;
 
+      _check_encrypted_doc($pms, $name, $data);
+      _check_oldtype_doc($pms, $name, $data);
       # zipped doc that matches olemacro_exts - strange
-      if (_is_zip_file($name, $data)) {
-        dbg("$name is a zipped file");
-        if (_check_zip($pms, $data)) {
-          $pms->{olemacro_exists} = 1;
-          $pms->{olemacro_renamed} = $pms->{olemacro_office_xml};
-          return 1;
-        }
+      if (_check_macrotype_doc($pms, $name, $data)) {
+        $pms->{olemacro_renamed} = $pms->{olemacro_office_xml};
       }
 
-      if (_is_encrypted_doc($data)) {
-        dbg("Attachment $name is encrypted");
-        $pms->{olemacro_encrypted} = 1;
-      }
-
-      # if we find markers then return true
-      if (_check_markers($data)) {
-        $pms->{olemacro_exists} = 1;
-        if (_check_malice($data)) {
-          $pms->{olemacro_malice} = 1;
-        }
-        return 1;
-      }
-
+      return 1 if $pms->{olemacro_exists} == 1;
     }
 
     if ($name =~ qr/$pms->{conf}->{olemacro_zips}/) {
-      dbg("Found attachment with name $name");# of type $ctype ");
+      dbg("Found zip attachment with name $name");
       $data = $part->decode($chunk_size) unless defined $data;
 
-      if (_is_zip_file($name, $data)) {
-        dbg("$name is a zip file");
-        if (_check_zip($pms, $data)) {
-          $pms->{olemacro_exists} = 1;
-          return 1;
-        }
-      }
+      _check_zip($pms, $name, $data);
 
+      return 1 if $pms->{olemacro_exists} == 1;
     }
 
     if ($pms->{conf}->{olemacro_extended_scan} == 1) {
-      dbg("Extended scan attachment with name $name");# of type $ctype ");
+      dbg("Extended scan attachment with name $name");
       $data = $part->decode($chunk_size) unless defined $data;
 
       if (_is_office_doc($data)) {
-        dbg("Found $name to be an Office Doc!");
         $pms->{olemacro_renamed} = 1;
-        if (_check_markers($data)) {
-          $pms->{olemacro_exists} = 1;
-          if (_check_malice($data)) {
-            $pms->{olemacro_malice} = 1;
-          }
-          return 1;
-        }
+        dbg("Found $name to be an Office Doc!");
+        _check_encrypted_doc($pms, $name, $data);
+        _check_oldtype_doc($pms, $name, $data);
       }
 
-      if (_is_zip_file($name, $data)) {
-        dbg("$name is a zip file");
-        if (_check_zip($pms, $data)) {
-          $pms->{olemacro_exists} = 1;
-          return 1;
-        }
+      if (_check_macrotype_doc($pms, $name, $data)) {
+        $pms->{olemacro_renamed} = $pms->{olemacro_office_xml};
       }
 
+      _check_zip($pms, $name, $data);
+
+      return 1 if $pms->{olemacro_exists} == 1;
     }
 
     # if we get to here with data a part has been scanned nudge as reqd
-    $mimec += 1 if defined $data;
+    $mimec+=1 if defined $data;
     if ($mimec > $pms->{conf}->{olemacro_num_mime}) {
       dbg('MIME limit reached');
       last;
     }
 
+  }
+  return 0;
+}
+
+sub _check_zip {
+  my ($pms, $name, $data, $depth) = @_;
+
+  $depth = $depth || 1;
+  return 0 if ($depth > $pms->{conf}->{olemacro_zip_depth});
+
+  return 0 unless _is_zip_file($name, $data);
+  my $zip = _open_zip_handle($data);
+  return 0 unless $zip;
+
+  dbg("Zip opened");
+
+  my $filec = 0;
+  my @members = $zip->members();
+  # foreach zip member
+  # - skip if in skip exts
+  # - return 1 if in macro types
+  # - check for marker if doc type
+  # - check if a zip
+  foreach my $member (@members){
+    my $mname = lc $member->fileName();
+    next if ($mname =~ qr/$pms->{conf}->{olemacro_skip_exts}/);
+
+    my $data = undef;
+    my $status = undef;
+
+    # if name is macrotype - return true
+    if ($mname =~ qr/$pms->{conf}->{olemacro_macro_exts}/) {
+      dbg("Found macrotype zip member $mname");
+      $pms->{olemacro_exists} = 1;
+
+      if ($member->isEncrypted()) {
+        dbg("Zip member $mname is encrypted (zip pw)");
+        $pms->{olemacro_zip_password} = 1;
+        return 1;
+      }
+
+      ( $data, $status ) = $member->contents() unless defined $data;
+      return 1 unless $status == AZ_OK;
+
+      _check_encrypted_doc($pms, $name, $data);
+      _check_macrotype_doc($pms, $name, $data);
+
+      return 1 if $pms->{olemacro_exists} == 1;
+    }
+
+    if ($mname =~ qr/$pms->{conf}->{olemacro_exts}/) {
+      dbg("Found zip member $mname");
+
+      if ($member->isEncrypted()) {
+        dbg("Zip member $mname is encrypted (zip pw)");
+        $pms->{olemacro_zip_password} = 1;
+        next;
+      }
+
+      ( $data, $status ) = $member->contents() unless defined $data;
+      next unless $status == AZ_OK;
+
+
+      _check_encrypted_doc($pms, $name, $data);
+      _check_oldtype_doc($pms, $name, $data);
+      # zipped doc that matches olemacro_exts - strange
+      if (_check_macrotype_doc($pms, $name, $data)) {
+        $pms->{olemacro_renamed} = $pms->{olemacro_office_xml};
+      }
+
+      return 1 if $pms->{olemacro_exists} == 1;
+
+    }
+
+    if ($mname =~ qr/$pms->{conf}->{olemacro_zips}/) {
+      dbg("Found zippy zip member $mname");
+      ( $data, $status ) = $member->contents() unless defined $data;
+      next unless $status == AZ_OK;
+
+      _check_zip($pms, $name, $data, $depth);
+
+      return 1 if $pms->{olemacro_exists} == 1;
+
+    }
+
+    if ($pms->{conf}->{olemacro_extended_scan} == 1) {
+      dbg("Extended scan attachment with member name $mname");
+      ( $data, $status ) = $member->contents() unless defined $data;
+      next unless $status == AZ_OK;
+
+      if (_is_office_doc($data)) {
+        dbg("Found $name to be an Office Doc!");
+        _check_encrypted_doc($pms, $name, $data);
+        $pms->{olemacro_renamed} = 1;
+        _check_oldtype_doc($pms, $name, $data);
+      }
+
+      if (_check_macrotype_doc($pms, $name, $data)) {
+        $pms->{olemacro_renamed} = $pms->{olemacro_office_xml};
+      }
+
+      _check_zip($pms, $name, $data, $depth);
+
+      return 1 if $pms->{olemacro_exists} == 1;
+
+    }
+
+    # if we get to here with data a member has been scanned nudge as reqd
+    $filec+=1 if defined $data;
+    if ($filec > $pms->{conf}->{olemacro_num_zip}) {
+      dbg('Zip limit reached');
+      last;
+    }
   }
   return 0;
 }
@@ -354,9 +446,8 @@ sub _get_part_details {
     return $ctt, $ctd, $cte, $name;
 }
 
-sub _check_zip {
-  my ($pms, $data) = @_;
-
+sub _open_zip_handle {
+  my ($data) = @_;
   # open our archive from raw datas
   my $SH = IO::String->new($data);
 
@@ -368,6 +459,16 @@ sub _check_zip {
     # so skip processing.
     return 0;
   }
+  return $zip;
+}
+
+sub _check_macrotype_doc {
+  my ($pms, $name, $data) = @_;
+
+  return 0 unless _is_zip_file($name, $data);
+
+  my $zip = _open_zip_handle($data);
+  return 0 unless $zip;
 
   # Look for a member named [Content_Types].xml and do checks
   if (my $ctypesxml = $zip->memberNamed('[Content_Types].xml')) {
@@ -377,7 +478,7 @@ sub _check_zip {
     return 0 unless $status == AZ_OK;
 
     if (_check_ctype_xml($data)) {
-
+      $pms->{olemacro_exists} = 1;
       if (_find_malice_bins($zip)) {
         $pms->{olemacro_malice} = 1;
       }
@@ -387,119 +488,33 @@ sub _check_zip {
     }
   }
 
-  my $filec = 0;
-  my @members = $zip->members();
-  # foreach zip member
-  # - skip if in skip exts
-  # - return 1 if in macro types
-  # - check for marker if doc type
-  # - check if a zip
-  foreach my $member (@members){
-    my $mname = lc $member->fileName();
-    next if ($mname =~ qr/$pms->{conf}->{olemacro_skip_exts}/);
+}
 
-    my $data = undef;
-    my $status = undef;
+# Office 2003
 
-    # if name is macrotype - return true
-    if ($mname =~ qr/$pms->{conf}->{olemacro_macro_exts}/) {
-      dbg("Found macrotype zip member $mname");
+sub _check_oldtype_doc {
+  my ($pms, $name, $data) = @_;
 
-      if ($member->isEncrypted()) {
-        dbg("Zip member $mname is encrypted");
-        $pms->{olemacro_zip_password} = 1;
-        next;
-      }
-
-      ( $data, $status ) = $member->contents() unless defined $data;
-      return 1 unless $status == AZ_OK;
-
-      if (_is_zip_file($mname, $data)) {
-        _check_zip($pms, $data);
-      }
-      return 1;
+  if (_check_markers($data)) {
+    $pms->{olemacro_exists} = 1;
+    if (_check_malice($data)) {
+     $pms->{olemacro_malice} = 1;
     }
-
-    if ($mname =~ qr/$pms->{conf}->{olemacro_exts}/) {
-      dbg("Found zip member $mname");
-
-      if ($member->isEncrypted()) {
-        dbg("Zip member $mname is encrypted");
-        $pms->{olemacro_zip_password} = 1;
-        next;
-      }
-
-      ( $data, $status ) = $member->contents() unless defined $data;
-      next unless $status == AZ_OK;
-
-      # zipped doc that matches olemacro_exts - strange
-      if (_is_zip_file($mname, $data)) {
-        dbg("$mname is a zipped file");
-        if (_check_zip($pms, $data)) {
-          $pms->{olemacro_renamed} = $pms->{olemacro_office_xml};
-          return 1;
-        }
-      }
-
-      if (_is_encrypted_doc($data)) {
-        dbg("Attachment $mname is encrypted");
-        $pms->{olemacro_encrypted} = 1;
-      }
-
-      if (_check_markers($data)) {
-        if (_check_malice($data)) {
-          $pms->{olemacro_malice} = 1;
-        }
-        return 1;
-      }
-
-    }
-
-    if ($mname =~ qr/$pms->{conf}->{olemacro_zips}/) {
-      ( $data, $status ) = $member->contents() unless defined $data;
-      next unless $status == AZ_OK;
-
-      if (_is_zip_file($mname, $data)) {
-        dbg("$mname is a zip file");
-        if (_check_zip($pms, $data)) {
-          return 1;
-        }
-      }
-    }
-
-    if ($pms->{conf}->{olemacro_extended_scan} == 1) {
-      ( $data, $status ) = $member->contents() unless defined $data;
-      next unless $status == AZ_OK;
-
-      dbg("Extended scan attachment with member name $mname");
-
-      if (_is_office_doc($data)) {
-        dbg("Found $mname to be an Office Doc!");
-        $pms->{olemacro_renamed} = 1;
-        if (_check_markers($data)) {
-          if (_check_malice($data)) {
-            $pms->{olemacro_malice} = 1;
-          }
-          return 1;
-        }
-      }
-
-      if (_is_zip_file($mname, $data)) {
-        dbg("$mname is a zip file");
-        if (_check_zip($pms, $data)) {
-          return 1;
-        }
-      }
-
-    }
-
-    # if we get to here with data a member has been scanned nudge as reqd
-    $filec+=1 if defined $data;
-    if ($filec > $pms->{conf}->{olemacro_num_zip}) {
-      dbg('Zip limit reached');
-      last;
-    }
+    return 1;
   }
+}
+
+# Encrypted doc
+
+sub _check_encrypted_doc {
+  my ($pms, $name, $data) = @_;
+
+  if (_is_encrypted_doc($data)) {
+    dbg("File $name is encrypted");
+    $pms->{olemacro_encrypted} = 1;
+  }
+
+  return $pms->{olemacro_encrypted};
 }
 
 sub _is_encrypted_doc {
@@ -524,9 +539,7 @@ sub _is_encrypted_doc {
     if (index($tdata, "E n c r y p t e d P a c k a g e") > -1) {
       return 1;
     }
-
   }
-
 }
 
 sub _is_office_doc {
@@ -602,7 +615,7 @@ sub _check_ctype_xml {
 }
 
 sub _zip_error_handler {
-
+ 1;
 }
 
 sub _decode_part_header {
