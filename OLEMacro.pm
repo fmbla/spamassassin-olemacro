@@ -410,7 +410,7 @@ sub _get_part_details {
     my $ctt = $part->get_header('content-type');
     return undef unless defined $ctt;
 
-    $ctt = _decode_part_header($part, lc($ctt || ''));
+    $ctt = _decode_part_header($part, $ctt || '');
 
     my $name = '';
     my $cttname = '';
@@ -422,14 +422,14 @@ sub _get_part_details {
     }
 
     my $ctd = $part->get_header('content-disposition');
-    $ctd = _decode_part_header($part, lc($ctd || ''));
+    $ctd = _decode_part_header($part, $ctd || '');
 
     if($ctd =~ m/filename\s*=\s*["']?([^"';]*)["']?/is){
       $ctdname = $1;
       $ctdname =~ s/\s+$//;
     }
 
-    if ($ctdname eq $cttname) {
+    if (lc $ctdname eq lc $cttname) {
       $name = $ctdname;
     } elsif ($ctdname eq '') {
       $name = $cttname;
@@ -445,7 +445,7 @@ sub _get_part_details {
 
     my $cte = lc($part->get_header('content-transfer-encoding') || '');
 
-    return $ctt, $ctd, $cte, $name;
+    return $ctt, $ctd, $cte, lc $name;
 }
 
 sub _open_zip_handle {
