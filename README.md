@@ -143,6 +143,14 @@ Should the content-disposition header filename be preferred if ambiguity is enco
 
 ##Change Log
 
+###Version 0.422
+
+ - **BUGFIX** Decode encoded Content-* headers correctly
+
+###Version 0.421
+
+ - **BUGFIX** Fix mime and zip limit
+
 ###Version 0.42
 
  - New regex values
