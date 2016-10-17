@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.422';
+our $VERSION = '0.423';
 
 # https://www.openoffice.org/sc/compdocfileformat.pdf
 # http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
@@ -290,7 +290,7 @@ sub _check_attachments {
 sub _check_zip {
   my ($pms, $name, $data, $depth) = @_;
 
-  return 0 if $pms->{conf}->{olemacro_zip_count} == 0;
+  return 0 if $pms->{conf}->{olemacro_num_zip} == 0;
 
   $depth = $depth || 1;
   return 0 if ($depth > $pms->{conf}->{olemacro_zip_depth});
