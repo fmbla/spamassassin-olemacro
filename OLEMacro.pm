@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.423';
+our $VERSION = '0.43';
 
 # https://www.openoffice.org/sc/compdocfileformat.pdf
 # http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
@@ -134,6 +134,21 @@ sub set_config {
   });
 
   push(@cmds, {
+    setting => 'olemacro_skip_ctypes',
+    default => '^(?:(audio|image|text)\/|application\/(?:pdf))',
+    type => $Mail::SpamAssassin::Conf::CONF_TYPE_STRING,
+    code => sub {
+      my ($self, $key, $value, $line) = @_;
+      unless (defined $value && $value !~ /^$/) {
+        return $Mail::SpamAssassin::Conf::MISSING_REQUIRED_VALUE;
+      }
+      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', $value);
+
+      $self->{olemacro_skip_ctypes} = $value;
+    },
+  });
+
+  push(@cmds, {
     setting => 'olemacro_zips',
     default => '(?:zip)$',
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_STRING,
@@ -207,20 +222,19 @@ sub _check_attachments {
 
   foreach my $part ($pms->{msg}->find_parts(qr/./, 1)) {
 
-    my ($ctt, $ctd, $cte, $name) = _get_part_details($pms, $part);
+    next if ($part->{type} =~ qr/$pms->{conf}->{olemacro_skip_ctypes}/);
 
+    my ($ctt, $ctd, $cte, $name) = _get_part_details($pms, $part);
     next unless defined $ctt;
-    next unless ($cte =~ /^(?:base64)$/);
 
     next if $name eq '';
-    next if ($name =~ qr/$pms->{conf}->{olemacro_skip_exts}/);
+    next if ($name =~ qr/$pms->{conf}->{olemacro_skip_exts}/i);
 
     # we skipped what we need/want to
-
     my $data = undef;
 
     # if name is macrotype - return true
-    if ($name =~ qr/$pms->{conf}->{olemacro_macro_exts}/) {
+    if ($name =~ qr/$pms->{conf}->{olemacro_macro_exts}/i) {
       dbg("Found macrotype attachment with name $name");
       $pms->{olemacro_exists} = 1;
 
@@ -233,7 +247,7 @@ sub _check_attachments {
     }
 
     # if name is ext type - check and return true if needed
-    if ($name =~ qr/$pms->{conf}->{olemacro_exts}/) {
+    if ($name =~ qr/$pms->{conf}->{olemacro_exts}/i) {
       dbg("Found attachment with name $name");
       $data = $part->decode($chunk_size) unless defined $data;
 
@@ -247,7 +261,7 @@ sub _check_attachments {
       return 1 if $pms->{olemacro_exists} == 1;
     }
 
-    if ($name =~ qr/$pms->{conf}->{olemacro_zips}/) {
+    if ($name =~ qr/$pms->{conf}->{olemacro_zips}/i) {
       dbg("Found zip attachment with name $name");
       $data = $part->decode($chunk_size) unless defined $data;
 
@@ -309,14 +323,14 @@ sub _check_zip {
   # - check for marker if doc type
   # - check if a zip
   foreach my $member (@members){
-    my $mname = lc $member->fileName();
-    next if ($mname =~ qr/$pms->{conf}->{olemacro_skip_exts}/);
+    my $mname = $member->fileName();
+    next if ($mname =~ qr/$pms->{conf}->{olemacro_skip_exts}/i);
 
     my $data = undef;
     my $status = undef;
 
     # if name is macrotype - return true
-    if ($mname =~ qr/$pms->{conf}->{olemacro_macro_exts}/) {
+    if ($mname =~ qr/$pms->{conf}->{olemacro_macro_exts}/i) {
       dbg("Found macrotype zip member $mname");
       $pms->{olemacro_exists} = 1;
 
@@ -335,7 +349,7 @@ sub _check_zip {
       return 1 if $pms->{olemacro_exists} == 1;
     }
 
-    if ($mname =~ qr/$pms->{conf}->{olemacro_exts}/) {
+    if ($mname =~ qr/$pms->{conf}->{olemacro_exts}/i) {
       dbg("Found zip member $mname");
 
       if ($member->isEncrypted()) {
@@ -359,7 +373,7 @@ sub _check_zip {
 
     }
 
-    if ($mname =~ qr/$pms->{conf}->{olemacro_zips}/) {
+    if ($mname =~ qr/$pms->{conf}->{olemacro_zips}/i) {
       dbg("Found zippy zip member $mname");
       ( $data, $status ) = $member->contents() unless defined $data;
       next unless $status == AZ_OK;
@@ -410,6 +424,9 @@ sub _get_part_details {
     my $ctt = $part->get_header('content-type');
     return undef unless defined $ctt;
 
+    my $cte = lc($part->get_header('content-transfer-encoding') || '');
+    return undef unless ($cte =~ /^(?:base64|quoted\-printable)$/);
+
     $ctt = _decode_part_header($part, $ctt || '');
 
     my $name = '';
@@ -443,9 +460,7 @@ sub _get_part_details {
       }
     }
 
-    my $cte = lc($part->get_header('content-transfer-encoding') || '');
-
-    return $ctt, $ctd, $cte, lc $name;
+    return $ctt, $ctd, $cte, $name;
 }
 
 sub _open_zip_handle {

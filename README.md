@@ -77,6 +77,7 @@ All configuration options should be fine at default. Tweak at your own risk.
  - olemacro_macro_exts
  - olemacro_zips
  - olemacro_skip_exts
+ - olemacro_skip_ctypes
  - olemacro_prefer_contentdisposition
 
 ####olemacro_max_file - [int] - bytes
@@ -135,6 +136,12 @@ Configure extensions for the plugin to skip entirely, these should only be guara
 
      olemacro_skip_exts (?:docx|dotx|potx|ppsx|pptx|sldx|xlsx|xltx)$
 
+####olemacro_skip_ctypes - [regex]
+Configure content types for the plugin to skip entirely, these should only be guaranteed macro free
+#####Default
+
+     olemacro_skip_ctypes ^(?:(audio|image|text)\/|application\/(?:pdf))
+
 ####olemacro_prefer_contentdisposition - [bool]
 Should the content-disposition header filename be preferred if ambiguity is encountered whilst trying to get filename
 #####Default
@@ -142,6 +149,16 @@ Should the content-disposition header filename be preferred if ambiguity is enco
      olemacro_prefer_contentdisposition 1
 
 ##Change Log
+
+###Version 0.43
+
+ - **NEW** Option **olemacro_skip_ctypes** added
+ - Adjustment of regex used
+ - Add QP to usable
+
+###Version 0.423
+
+ - **BUGFIX** Bug introduced in 0.421
 
 ###Version 0.422
 
