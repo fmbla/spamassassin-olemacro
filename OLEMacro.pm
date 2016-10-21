@@ -89,7 +89,7 @@ sub set_config {
 
   push(@cmds, {
     setting => 'olemacro_exts',
-    default => '(?:doc|dot|pot|ppa|pps|ppt|sldm|xl|xla|xls|xlt|xslb)$',
+    default => '(?:doc|dot|pot|ppa|pps|ppt|rtf|sldm|xl|xla|xls|xlt|xslb)$',
     type => $Mail::SpamAssassin::Conf::CONF_TYPE_STRING,
     code => sub {
       my ($self, $key, $value, $line) = @_;
