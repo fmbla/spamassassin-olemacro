@@ -12,7 +12,7 @@ use re 'taint';
 use vars qw(@ISA);
 @ISA = qw(Mail::SpamAssassin::Plugin);
 
-our $VERSION = '0.432';
+our $VERSION = '0.5';
 
 # https://www.openoffice.org/sc/compdocfileformat.pdf
 # http://blog.rootshell.be/2015/01/08/searching-for-microsoft-office-files-containing-macro/
@@ -487,23 +487,42 @@ sub _check_macrotype_doc {
   my $zip = _open_zip_handle($data);
   return 0 unless $zip;
 
+  #https://www.decalage.info/vba_tools
+  my %macrofiles = (
+    'word/vbaproject.bin' => 'word2k7',
+    'macros/vba/_vba_project' => 'word97',
+    'xl/vbaproject.bin' => 'xl2k7',
+    '_vba_project_cur/vba/_vba_project' => 'xl97',
+    'ppt/vbaproject.bin' => 'ppt2k7',
+  );
+
+  my @members = $zip->members();
+  foreach my $member (@members){
+    my $mname = lc $member->fileName();
+    if (exists($macrofiles{$mname})) {
+      dbg("Found $macrofiles{$mname} vba file");
+      $pms->{olemacro_exists} = 1;
+      last;
+    }
+  }
+
   # Look for a member named [Content_Types].xml and do checks
   if (my $ctypesxml = $zip->memberNamed('[Content_Types].xml')) {
     dbg('Found [Content_Types].xml file');
     $pms->{olemacro_office_xml} = 1;
-    my ( $data, $status ) = $ctypesxml->contents();
-    return 0 unless $status == AZ_OK;
+    if (!$pms->{olemacro_exists}) {
+      my ( $data, $status ) = $ctypesxml->contents();
 
-    if (_check_ctype_xml($data)) {
-      $pms->{olemacro_exists} = 1;
-      if (_find_malice_bins($zip)) {
-        $pms->{olemacro_malice} = 1;
+      if (($status == AZ_OK) && (_check_ctype_xml($data))) {
+        $pms->{olemacro_exists} = 1;
       }
-      return 1;
-    } else {
-      return 0;
-    }
   }
+
+  if (($pms->{olemacro_exists}) && (_find_malice_bins($zip))) {
+    $pms->{olemacro_malice} = 1;
+  }
+
+  return $pms->{olemacro_exists};
 
 }
 
