@@ -150,6 +150,10 @@ Should the content-disposition header filename be preferred if ambiguity is enco
 
 ## Change Log
 
+### Version 0.5
+
+ - **NEW** OLE container based file detection
+
 ### Version 0.43
 
  - **NEW** Option **olemacro_skip_ctypes** added
