@@ -516,6 +516,7 @@ sub _check_macrotype_doc {
       if (($status == AZ_OK) && (_check_ctype_xml($data))) {
         $pms->{olemacro_exists} = 1;
       }
+    }
   }
 
   if (($pms->{olemacro_exists}) && (_find_malice_bins($zip))) {
