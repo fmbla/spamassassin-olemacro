@@ -96,8 +96,7 @@ sub set_config {
       unless (defined $value && $value !~ /^$/) {
         return $Mail::SpamAssassin::Conf::MISSING_REQUIRED_VALUE;
       }
-      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', $value);
-
+      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', '/'.$value.'/');
       $self->{olemacro_exts} = $value;
       },
     }
@@ -112,7 +111,7 @@ sub set_config {
       unless (defined $value && $value !~ /^$/) {
         return $Mail::SpamAssassin::Conf::MISSING_REQUIRED_VALUE;
       }
-      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', $value);
+      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', '/'.$value.'/');
 
       $self->{olemacro_macro_exts} = $value;
     },
@@ -127,7 +126,7 @@ sub set_config {
       unless (defined $value && $value !~ /^$/) {
         return $Mail::SpamAssassin::Conf::MISSING_REQUIRED_VALUE;
       }
-      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', $value);
+      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', '/'.$value.'/');
 
       $self->{olemacro_skip_exts} = $value;
     },
@@ -142,7 +141,7 @@ sub set_config {
       unless (defined $value && $value !~ /^$/) {
         return $Mail::SpamAssassin::Conf::MISSING_REQUIRED_VALUE;
       }
-      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', $value);
+      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', '/'.$value.'/');
 
       $self->{olemacro_skip_ctypes} = $value;
     },
@@ -157,7 +156,7 @@ sub set_config {
       unless (defined $value && $value !~ /^$/) {
         return $Mail::SpamAssassin::Conf::MISSING_REQUIRED_VALUE;
       }
-      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', $value);
+      return $Mail::SpamAssassin::Conf::INVALID_VALUE unless $self->{parser}->is_delimited_regexp_valid('TESTING', '/'.$value.'/');
 
       $self->{olemacro_zips} = $value;
     },
