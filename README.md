@@ -1,4 +1,7 @@
 # Spamassassin OLEMacro
+
+## Please note this is now integrated into Spamassassin trunk
+
 Spamassassin OLEMacro is a plug in that searches attached documents for evidence of containing an OLE Macro.
 
 Several detection methods are in use, see the code comments for references.
